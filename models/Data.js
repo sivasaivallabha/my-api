@@ -1,9 +1,6 @@
 const mongoose = require('mongoose');
 
-const DataSchema = new mongoose.Schema({
-  names: String,
-  age: Number,
-  income: Number
-});
+// Flexible schema (accept any fields)
+const DataSchema = new mongoose.Schema({}, { strict: false });
 
 module.exports = mongoose.model('Data', DataSchema);
