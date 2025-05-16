@@ -155,18 +155,30 @@ exports.getData = async (req, res) => {
 // Helper to normalize strings
 const normalize = (str) => str.toLowerCase().trim().replace(/\s+/g, ' ');
 
-// Compute accuracy based on matching words in header
+// Compute accuracy based on matching words in header using substring check
 const computeAccuracy = (inputWords, targetHeader) => {
-  const targetWords = normalize(targetHeader).split(' ');
-  const matchedCount = inputWords.filter(word => targetWords.includes(word)).length;
-  return (matchedCount / targetWords.length) * 100; // use target header length
+  const normalizedTarget = normalize(targetHeader); // Normalize the full target header
+  
+  let matchedCount = 0;
+
+  // Count how many input words are substrings of the target header
+  for (const word of inputWords) {
+    if (normalizedTarget.includes(word)) {
+      matchedCount++;
+      
+    }
+  }
+  
+  // Accuracy is based on number of matched words vs total words in target
+  const targetWords = normalizedTarget.split(/[\s,/]+/);
+  return (matchedCount / targetWords.length) * 100;
 };
 
 
 // Match an input header to the fixed output headers based on accuracy
 const matchHeader = (inputTitle, outputHeadersMap) => {
   if (!inputTitle) return null;
-  const words = normalize(inputTitle).split(' ');
+  const words = normalize(inputTitle).split(/[\s,/]+/);
 
   let bestMatch = null;
   let highestAccuracy = 0;
@@ -174,7 +186,7 @@ const matchHeader = (inputTitle, outputHeadersMap) => {
   for (const [outputKey, variations] of Object.entries(outputHeadersMap)) {
     for (const variation of variations) {
       const accuracy = computeAccuracy(words, variation);
-      if (accuracy > 80 && accuracy > highestAccuracy) {
+      if (accuracy > 70 && accuracy > highestAccuracy) {
         highestAccuracy = accuracy;
         bestMatch = outputKey;
       }
@@ -214,13 +226,13 @@ exports.generateFormattedExcel = async (req, res) => {
     ];
 
     const outputHeadersMap = {
-      'ULB Name': ['ulb name'],
+      'ULB Name': ['ulb name','ulbname'],
       'Code No/Major Code': ['code no', 'major code'],
       'Schedule No/Schedule': ['schedule no', 'schedule'],
       'Type of Fund': ['type of fund'],
       'Item/Head Account/Description of Items/Account Head/Description/Particulars': [
-        'item', 'head account', 'description of items', 'account head', 'description', 'particulars'
-      ],
+        'item', 'head account', 'Item/Head of Account','description of items', 'account head', 'description', 'particulars'
+      ],                        
       'Amount & Date (Current Year)': ['amount current year', 'current year amount', 'amount of current year'],
       'Amount & Date (Previous Year)': ['amount previous year', 'previous year amount', 'amount of previous year'],
     };
@@ -233,29 +245,33 @@ exports.generateFormattedExcel = async (req, res) => {
       'devolution fund',
       'devolution fund (including state finance commission fund)',
       'scheme grants',
-      'grants and contribution'
+      'grants and contribution',
+      'Contribution and Subsidies'
+      
+      
+     
     ];
 
     const workbook = xlsx.utils.book_new();
     const worksheetData = [outputHeaders];
 
-    let ulbName = '';
+    //let ulbName = '';
 
     // Pre-fetch ULB Name
-    for (const item of dataDoc.data) {
-      for (const cell of item.row) {
-        if (matchHeader(cell.title, { 'ULB Name': ['ulb name'] }) === 'ULB Name') {
-          ulbName = cell.value || '';
-          break;
-        }
-      }
-      if (ulbName) break;
-    }
+    //for (const item of dataDoc.data) {
+      //for (const cell of item.row) {
+       // if (matchHeader(cell.title, { 'ULB Name': ['ulb name'] }) === 'ULB Name') {
+        //  ulbName = cell.value || '';
+       //   break;
+      //  }
+    //  }
+    //  if (ulbName) break;
+   // }
 
     for (const item of dataDoc.data) {
       const rowObj = {
         'ULB Code': ulbcode,
-        'ULB Name': ulbName,
+        'ULB Name': '',
         'Code No/Major Code': '',
         'Schedule No/Schedule': '',
         'Type of Fund': '',
@@ -266,6 +282,7 @@ exports.generateFormattedExcel = async (req, res) => {
 
       for (const cell of item.row) {
         const match = matchHeader(cell.title, outputHeadersMap);
+       // console.log('Matching:', cell.title, '=>', match);
         if (match && cell.value) {
           const labelValue = `${cell.title?.trim()}: ${cell.value}`;
           if (match === 'Item/Head Account/Description of Items/Account Head/Description/Particulars') {
@@ -279,8 +296,10 @@ exports.generateFormattedExcel = async (req, res) => {
 
       // Only include rows if item field includes an important title
       const itemFieldLower = (rowObj['Item/Head Account/Description of Items/Account Head/Description/Particulars'] || '').toLowerCase();
+ 
       const hasImportant = importantTitles.some(title => itemFieldLower.includes(title.toLowerCase()));
       if (hasImportant) {
+         
         worksheetData.push([
           rowObj['ULB Code'],
           rowObj['ULB Name'],
